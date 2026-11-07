@@ -14,6 +14,11 @@ OLLAMA_HOST = os.getenv(
     "http://localhost:11434"
 )
 
+DATABASE_PATH = os.getenv(
+    "DATABASE_PATH",
+    "data/chatbot.db"
+)
+
 SYSTEM_PROMPT = """
 You are a helpful personal AI assistant.
 
