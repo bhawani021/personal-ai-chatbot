@@ -57,7 +57,7 @@ class PersonalChatbot:
                 return "ERROR: Ollama returned an empty response."
 
             # update conversation history after getting a successful response
-            self.conversation_history.append([
+            self.conversation_history.extend([
                 {
                     "role": "user",
                     "content": user_message
