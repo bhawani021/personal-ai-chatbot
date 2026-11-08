@@ -27,7 +27,7 @@ class PersonalChatbot:
         messages = [
             {
                 "role": "system",
-                "context": SYSTEM_PROMPT
+                "content": SYSTEM_PROMPT
             },
             *self.conversation_history,
             {
@@ -57,10 +57,10 @@ class PersonalChatbot:
                 return "ERROR: Ollama returned an empty response."
 
             # update conversation history after getting a successful response
-            self.conversation_history.append([
+            self.conversation_history.extend([
                 {
                     "role": "user",
-                    "context": user_message
+                    "content": user_message
                 },
                 {
                     "role": "assistant",
