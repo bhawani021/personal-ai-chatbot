@@ -27,7 +27,7 @@ class PersonalChatbot:
         messages = [
             {
                 "role": "system",
-                "context": SYSTEM_PROMPT
+                "content": SYSTEM_PROMPT
             },
             *self.conversation_history,
             {
@@ -60,7 +60,7 @@ class PersonalChatbot:
             self.conversation_history.append([
                 {
                     "role": "user",
-                    "context": user_message
+                    "content": user_message
                 },
                 {
                     "role": "assistant",

@@ -35,25 +35,25 @@ class Database:
             id TEXT PRIMARY KEY,
             title TEXT NOT NULL,
             system_prompt TEXT,
-            create_at TEXT NOT NULL,
-            update_at TEXT NOT NULL
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
         );
 
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             conversation_id TEXT NOT NULL,
             role TEXT NOT NULL
-                CHECK (ROLE IN ('user', 'assistant')),
-            context TEXT NOT NULL,
-            create_at TEXT NOT NULL,
+                CHECK (role IN ('user', 'assistant')),
+            content TEXT NOT NULL,
+            created_at TEXT NOT NULL,
 
             FOREIGN KEY (conversation_id)
-            REFERENCES conversations(id)
-            ON DELETE CASCADE
+                REFERENCES conversations(id)
+                ON DELETE CASCADE
         );
 
         CREATE INDEX IF NOT EXISTS
-            idx_message_conversation
+            idx_messages_conversation
         ON messages(conversation_id);
         """
 
