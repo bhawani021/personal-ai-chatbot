@@ -3,49 +3,55 @@ from app.repositories.conversation_repository import (
     ConversationRepository,
 )
 
-database = Database()
-database.initialize()
 
-repository = ConversationRepository(database)
+def main():
+    database = Database()
+    database.initialize()
 
-# 1. Create conversation
-conversation = repository.create_conversation(
-    title="Learning AI and Python"
-)
+    repository = ConversationRepository(database)
 
-conversation_id = conversation["id"]
+    # 1. Create conversation
+    conversation = repository.create_conversation(
+        title="Learning AI and Python"
+    )
 
-print("\nCreated conversation:")
-print(conversation)
+    conversation_id = conversation["id"]
 
-# 2. Save user message
-repository.add_message(
-    conversation_id,
-    "user",
-    "What is RAG?",
-)
+    print("\nCreated conversation:")
+    print(conversation)
 
-# 3. Save assistant message
-repository.add_message(
-    conversation_id,
-    "assistant",
-    "RAG stands for Retrieval-Augmented Generation.",
-)
+    # 2. Save user message
+    repository.add_message(
+        conversation_id,
+        "user",
+        "What is RAG?",
+    )
 
-# 4. Retrieve messages
-messages = repository.get_messages(conversation_id)
+    # 3. Save assistant message
+    repository.add_message(
+        conversation_id,
+        "assistant",
+        "RAG stands for Retrieval-Augmented Generation.",
+    )
 
-print("\nConversation messages:")
+    # 4. Retrieve messages
+    messages = repository.get_messages(conversation_id)
 
-for message in messages:
-    print(f'{message["role"]}: {message["content"]}')
+    print("\nConversation messages:")
 
-# 5. List conversations
-print("\nAll conversations:")
+    for message in messages:
+        print(f'{message["role"]}: {message["content"]}')
 
-for item in repository.list_conversations():
-    print(item["id"], item["title"])
+    # 5. List conversations
+    print("\nAll conversations:")
 
-# 6. Retrieve one conversation
-print("\nRetrieved conversation:")
-print(repository.get_conversation(conversation_id))
+    for item in repository.list_conversations():
+        print(item["id"], item["title"])
+
+    # 6. Retrieve one conversation
+    print("\nRetrieved conversation:")
+    print(repository.get_conversation(conversation_id))
+
+
+if __name__ == "__main__":
+    main()
