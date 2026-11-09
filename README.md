@@ -63,19 +63,22 @@ different model if needed.
 ```text
 personal-ai-chatbot/
 ├── app/
-│   ├── chatbot.py
+│   ├── chatbot.py                 # earlier in-memory chatbot
 │   ├── config.py
 │   ├── database.py
 │   ├── repositories/
 │   │   └── conversation_repository.py
 │   └── services/
-│       ├── context_manager.py
-│       └── conversation_service.py
+│       ├── context_manager.py     # placeholder
+│       ├── conversation_service.py # placeholder
+│       ├── llm_service.py
+│       └── persistent_chatbot.py
 ├── data/                         # generated locally; ignored by Git
 │   └── chatbot.db
 ├── tests/
 │   ├── test_conversation_repository.py
-│   └── test_repository_manual.py
+│   ├── test_persistent_chatbot.py
+│   └── run_manual.py
 ├── .env.example
 ├── main.py
 └── requirements.txt
@@ -83,17 +86,19 @@ personal-ai-chatbot/
 
 ## Architecture
 
-- `main.py` runs the interactive command-line loop and delegates chat requests
-  to `PersonalChatbot`.
+- `main.py` initializes the SQLite database, repository, and persistent
+  chatbot, then runs the interactive command loop.
 - `app/config.py` loads Ollama and SQLite settings from `.env`.
-- `app/database.py` creates the SQLite schema and manages database connections.
-- `app/repositories/conversation_repository.py` provides conversation and
-  message persistence operations.
-- `app/services/` is reserved for conversation orchestration and context
-  management; these modules are currently placeholders.
-
-The CLI still keeps its chat history in memory and does not yet call the
-repository layer.
+- `app/database.py` creates the schema and manages SQLite connections.
+- `app/repositories/conversation_repository.py` provides CRUD operations for
+  conversations and their messages.
+- `app/services/persistent_chatbot.py` loads stored history, builds the LLM
+  request, and saves user/assistant messages after a successful response.
+- `app/services/llm_service.py` sends chat requests to the configured Ollama
+  model.
+- `app/services/context_manager.py` and
+  `app/services/conversation_service.py` are placeholders. `app/chatbot.py` is
+  the earlier in-memory implementation; the CLI now uses `PersistentChatbot`.
 
 ## SQLite conversation storage
 
@@ -106,19 +111,20 @@ configured by `DATABASE_PATH`. It creates:
 
 `ConversationRepository` provides operations to create, retrieve, list, rename,
 and delete conversations, and to add or retrieve their messages. The database
-file is local and the default `data/` directory is ignored by Git.
+file is local and the default `data/` directory is ignored by Git. The CLI
+creates a new conversation at startup; use `/list` and `/open <id>` to return to
+saved conversations.
 
 To run the repository example from the project root:
 
 ```bash
-PYTHONPATH=. python tests/test_repository_manual.py
+PYTHONPATH=. python tests/run_manual.py
 ```
 
-The example writes to the configured database. Run only the automated
-repository tests with:
+The example writes to the configured database. Run all automated tests with:
 
 ```bash
-python -m unittest discover -s tests -p 'test_conversation_repository.py' -v
+python -m unittest discover -s tests -v
 ```
 
 ## Run
@@ -129,18 +135,20 @@ With the virtual environment active and Ollama running:
 python main.py
 ```
 
-The interactive prompt lists these commands:
+The app starts a new conversation when it launches. The interactive prompt
+supports:
 
-| Command    | Purpose                    |
-|------------|----------------------------|
-| `/help`    | Show the command list      |
-| `/history` | Show conversation history  |
-| `/reset`   | Clear conversation history |
-| `/exit`    | Exit the chatbot           |
+| Command      | Purpose                         |
+|--------------|---------------------------------|
+| `/new`       | Create a new conversation       |
+| `/list`      | List saved conversations        |
+| `/open <id>` | Open a saved conversation       |
+| `/history`   | Show the active conversation    |
+| `/help`      | Show the command list           |
+| `/exit`      | Exit the chatbot                |
 
 ## Current limitations
 
-The CLI does not yet use SQLite; its chat history is still kept in memory.
-Conversation turns are currently stored as nested lists, which can make
-follow-up Ollama requests fail. The `/history` and `/reset` command handlers do
-not match the current history structure and may raise errors.
+Conversation orchestration currently lives in `PersistentChatbot`; the
+`ConversationService` and `ContextManager` modules have not been implemented
+yet. If an Ollama request fails, the current user message is not saved.

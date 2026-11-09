@@ -127,13 +127,8 @@ class ConversationRepository:
     # Message operations
     # --------------------------------------------------
 
-    def add_message(
-            self,
-            conversation_id: str,
-            role: str,
-            content: str,
-    ) -> dict:
-
+    @staticmethod
+    def _validate_message(role: str, content: str) -> None:
         if role not in ["user", "assistant"]:
             raise ValueError(
                 "Role must be either 'user' or 'assistant'"
@@ -143,6 +138,28 @@ class ConversationRepository:
             raise ValueError(
                 "Message content cannot be empty"
             )
+
+    def add_message(
+            self,
+            conversation_id: str,
+            role: str,
+            content: str,
+    ) -> dict:
+        return self.add_messages(
+            conversation_id,
+            [(role, content)],
+        )[0]
+
+    def add_messages(
+            self,
+            conversation_id: str,
+            messages: list[tuple[str, str]],
+    ) -> list[dict]:
+        if not messages:
+            return []
+
+        for role, content in messages:
+            self._validate_message(role, content)
 
         timestamp = current_timestamp()
 
@@ -156,15 +173,7 @@ class ConversationRepository:
             VALUES (?, ?, ?, ?)
         """
 
-        update_conversation_query = """
-            UPDATE conversations
-            SET updated_at = ?
-            WHERE ID = ?
-        """
-
         with self.database.get_connection() as connection:
-
-            # ensure that parent conversation exists
             conversation = connection.execute(
                 "SELECT id FROM conversations WHERE id = ?",
                 (conversation_id,),
@@ -175,33 +184,35 @@ class ConversationRepository:
                     f"Conversation not found: {conversation_id}"
                 )
 
-            cursor = connection.execute(
-                insert_message_query,
-                (
-                    conversation_id,
-                    role,
-                    content,
-                    timestamp,
-                ),
-            )
-
-            message_id = cursor.lastrowid
+            inserted_messages = []
+            for role, content in messages:
+                cursor = connection.execute(
+                    insert_message_query,
+                    (
+                        conversation_id,
+                        role,
+                        content,
+                        timestamp,
+                    ),
+                )
+                inserted_messages.append({
+                    "id": cursor.lastrowid,
+                    "conversation_id": conversation_id,
+                    "role": role,
+                    "content": content,
+                    "created_at": timestamp,
+                })
 
             connection.execute(
-                update_conversation_query,
-                (
-                    timestamp,
-                    conversation_id,
-                ),
+                """
+                UPDATE conversations
+                SET updated_at = ?
+                WHERE id = ?
+                """,
+                (timestamp, conversation_id),
             )
 
-        return {
-            "id": message_id,
-            "conversation_id": conversation_id,
-            "role": role,
-            "content": content,
-            "created_at": timestamp,
-        }
+        return inserted_messages
 
     def get_messages(
             self,
