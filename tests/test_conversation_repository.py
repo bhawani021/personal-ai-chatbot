@@ -1,3 +1,4 @@
+import sqlite3
 import tempfile
 import unittest
 
@@ -62,6 +63,35 @@ class TestConversationRepository(unittest.TestCase):
         self.assertEqual(len(messages), 2)
         self.assertEqual(messages[0]["role"], "user")
         self.assertEqual(messages[1]["role"], "assistant")
+
+    def test_add_messages_rolls_back_as_a_batch(self):
+        conversation = self.repository.create_conversation(
+            title="Atomic Chat"
+        )
+
+        with self.database.get_connection() as connection:
+            connection.execute("""
+                CREATE TRIGGER reject_assistant_message
+                BEFORE INSERT ON messages
+                WHEN NEW.role = 'assistant'
+                BEGIN
+                    SELECT RAISE(ABORT, 'assistant insert failed');
+                END;
+            """)
+
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.repository.add_messages(
+                conversation["id"],
+                [
+                    ("user", "Hello"),
+                    ("assistant", "Response"),
+                ],
+            )
+
+        self.assertEqual(
+            self.repository.get_messages(conversation["id"]),
+            [],
+        )
 
     def test_list_conversations(self):
         self.repository.create_conversation("Chat 1")

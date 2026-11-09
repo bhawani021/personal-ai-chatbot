@@ -95,16 +95,12 @@ class PersistentChatbot:
         assistant_response = self.llm_service.generate(messages)
 
         #5. Persist both messages after successful generation
-        self.repository.add_message(
+        self.repository.add_messages(
             self.current_conversation_id,
-            "user",
-            user_message
-        )
-
-        self.repository.add_message(
-            self.current_conversation_id,
-            "assistant",
-            assistant_response
+            [
+                ("user", user_message),
+                ("assistant", assistant_response),
+            ],
         )
 
         # 6. Automatically name a new conversation using it;s first message
