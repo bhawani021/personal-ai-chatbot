@@ -91,9 +91,10 @@ personal-ai-chatbot/
 - `app/config.py` loads Ollama and SQLite settings from `.env`.
 - `app/database.py` creates the schema and manages SQLite connections.
 - `app/repositories/conversation_repository.py` provides CRUD operations for
-  conversations and their messages.
+  conversations and their messages, including search and atomic message batches.
 - `app/services/persistent_chatbot.py` loads stored history, builds the LLM
-  request, and saves user/assistant messages after a successful response.
+  request, manages conversations, and saves user/assistant messages together
+  after a successful response.
 - `app/services/llm_service.py` sends chat requests to the configured Ollama
   model.
 - `app/services/context_manager.py` and
@@ -110,10 +111,11 @@ configured by `DATABASE_PATH`. It creates:
   associated messages when a conversation is deleted.
 
 `ConversationRepository` provides operations to create, retrieve, list, rename,
-and delete conversations, and to add or retrieve their messages. The database
-file is local and the default `data/` directory is ignored by Git. The CLI
-creates a new conversation at startup; use `/list` and `/open <id>` to return to
-saved conversations.
+delete, and search conversations, and to add or retrieve their messages.
+Conversation message pairs are saved in one transaction. The database file is
+local and the default `data/` directory is ignored by Git. The CLI creates a
+new conversation at startup; use `/list` and `/open <id>` to return to saved
+conversations.
 
 To run the repository example from the project root:
 
@@ -138,17 +140,23 @@ python main.py
 The app starts a new conversation when it launches. The interactive prompt
 supports:
 
-| Command      | Purpose                         |
-|--------------|---------------------------------|
-| `/new`       | Create a new conversation       |
-| `/list`      | List saved conversations        |
-| `/open <id>` | Open a saved conversation       |
-| `/history`   | Show the active conversation    |
-| `/help`      | Show the command list           |
-| `/exit`      | Exit the chatbot                |
+| Command            | Purpose                                                 |
+|--------------------|---------------------------------------------------------|
+| `/new`             | Create a new conversation                               |
+| `/list`            | List saved conversations                                |
+| `/open <id>`       | Open a saved conversation                               |
+| `/rename <title>`  | Rename the active conversation                         |
+| `/delete [id]`     | Delete the active or specified conversation (confirmed) |
+| `/search <keyword>`| Search conversation titles and messages                 |
+| `/history`         | Show the active conversation's messages                |
+| `/info`            | Show active conversation details and message counts     |
+| `/help`            | Show the command list                                   |
+| `/exit`            | Exit the chatbot                                        |
 
 ## Current limitations
 
 Conversation orchestration currently lives in `PersistentChatbot`; the
 `ConversationService` and `ContextManager` modules have not been implemented
-yet. If an Ollama request fails, the current user message is not saved.
+yet. The chatbot starts a new conversation each time the app launches; open a
+saved conversation with `/open <id>`. If an Ollama request fails, the current
+user message is not saved.

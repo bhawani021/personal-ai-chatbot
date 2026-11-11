@@ -5,14 +5,27 @@ from app.services.persistent_chatbot import PersistentChatbot
 
 def print_help():
     print("""
-Available commands:
+    ================================================
+                 PERSISTENT AI CHATBOT
+    ================================================
 
-    /new              Create a new conversation
-    /list             List saved conversations
-    /open <id>        Open an existing conversation
-    /history          Display current conversation history
-    /help             Display available commands
-    /exit             Exit the application
+    Conversation commands:
+
+      /new                  Create a new conversation
+      /list                 List all conversations
+      /open <id>            Open an existing conversation
+      /rename <title>       Rename the active conversation
+      /delete [id]          Delete active or specified conversation
+      /search <keyword>     Search conversations
+
+    Information commands:
+
+      /history              Display conversation history
+      /info                 Display active conversation information
+      /help                 Display available commands
+      /exit                 Exit the application
+
+    ================================================
     """)
 
 
@@ -22,13 +35,13 @@ def print_conversations(conversations):
         return
 
     print("\nSaved conversations:")
+    print("-" * 90)
 
-    for conversation in conversations:
-        print(
-            f"\nTitle: {conversation['title']}"
-            f"\nID: {conversation['id']}"
-            f"\nUpdated: {conversation['updated_at']}"
-        )
+    for index, conversation in enumerate(conversations, start=1):
+        print(f"{index}. {conversation['title']}")
+        print(f"    ID: {conversation['id']}")
+        print(f"    Updated: {conversation['updated_at']}")
+        print("-" * 90)
 
 
 def print_history(messages):
@@ -37,10 +50,47 @@ def print_history(messages):
         return
 
     print("\nConversation history:")
+    print("-" * 70)
 
     for message in messages:
         role = message["role"].upper()
-        print(f"\n{role}: {message['content']}")
+
+        print(f"\n{role}")
+        print(message["content"])
+        print(f"Time: {message['created_at']}")
+
+    print("-" * 70)
+
+
+def print_info(chatbot):
+    conversation = chatbot.get_current_conversation()
+
+    if conversation is None:
+        print("\nNo active conversation")
+        return
+
+    messages = chatbot.get_history()
+
+    user_messages = sum(
+        1 for message in messages
+        if message["role"] == "user"
+    )
+
+    assistant_messages = sum(
+        1 for message in messages
+        if message["role"] == "assistant"
+    )
+
+    print("\nActive Conversation Information")
+    print("-" * 50)
+    print(f"Title: {conversation['title']}")
+    print(f"ID: {conversation['id']}")
+    print(f"Created: {conversation['created_at']}")
+    print(f"Updated: {conversation['updated_at']}")
+    print(f"Total messages: {len(messages)}")
+    print(f"User messages: {user_messages}")
+    print(f"Assistant messages: {assistant_messages}")
+    print("-" * 50)
 
 
 def main():
@@ -57,9 +107,10 @@ def main():
 
     print("\n===================================")
     print("      Persistent AI Chatbot")
-    print("===================================")
-    print(f"Active conversation: {conversation['id']}")
-    print("Type /help to see available commands.\n")
+    print("=====================================")
+    print(f"Active chat: {conversation['title']}")
+    print(f"Conversation ID: {conversation['id']}")
+    print("\nType /help for available commands")
 
     while True:
         try:
@@ -78,7 +129,7 @@ def main():
             elif user_input == "/new":
                 conversation = chatbot.create_new_conversation()
                 print(
-                    f"New conversation created: {conversation['id']}"
+                    f"New conversation created: \nID: {conversation['id']}"
                 )
 
             elif user_input == "/list":
@@ -95,8 +146,73 @@ def main():
                 except ValueError as error:
                     print(error)
 
+            elif user_input.startswith("/rename"):
+                parts = user_input.split(maxsplit=1)
+
+                if len(parts) < 2 or not parts[1].strip():
+                    print("Usage: /rename <new title>")
+                    continue
+
+                title = parts[1].strip()
+
+                conversation = chatbot.get_current_conversation()
+
+                if conversation is None:
+                    print("No active conversation")
+
+                chatbot.rename_conversation(
+                    conversation["id"],
+                    title
+                )
+
+                print(f"Conversation renamed to: {title}")
+
+
+            elif user_input == "/delete" or user_input.startswith("/delete "):
+                parts = user_input.split(maxsplit=1)
+
+                if len(parts) == 2:
+                    conversation_id = parts[1].strip()
+                else:
+                    conversation = chatbot.get_current_conversation()
+
+                    if conversation is None:
+                        print("No active conversation.")
+                        continue
+
+                    conversation_id = conversation["id"]
+
+                confirmation = input(
+                    f"Delete conversation {conversation_id}? (y/n): "
+                ).strip().lower()
+
+                if confirmation != 'y':
+                    print("Delete cancelled")
+                    continue
+
+                if chatbot.delete_conversation(conversation_id):
+                    print("Conversation deleted")
+
+                    # If the active conversation was deleted
+                    # resume another conversation or create one
+                    if chatbot.get_current_conversation() is None:
+                        conversation = chatbot.resume_latest_conversation()
+                        print(f"Active chat: {conversation['title']}")
+                else:
+                    print("Conversation not found.")
+
+            elif user_input.startswith("/search"):
+                keyword = user_input.split(maxsplit=1)[1]
+
+                results = chatbot.search_conversations(keyword)
+
+                print_conversations(results)
+
             elif user_input == "/history":
                 print_history(chatbot.get_history())
+
+            elif user_input == "/info":
+                print_info(chatbot)
 
             elif user_input.startswith("/"):
                 print("Unknown command. Type /help for commands.")
@@ -111,7 +227,6 @@ def main():
 
         except Exception as error:
             print(f"\nError: {error}")
-
 
 if __name__ == "__main__":
     main()

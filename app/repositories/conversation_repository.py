@@ -5,7 +5,7 @@ from app.database import Database
 
 
 def current_timestamp() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return datetime.now(timezone.utc).isoformat(timespec="microseconds")
 
 
 class ConversationRepository:
@@ -72,7 +72,7 @@ class ConversationRepository:
         query = """
             SELECT *
             FROM conversations
-            ORDER BY updated_at DESC
+            ORDER BY updated_at DESC, rowid DESC
         """
 
         with self.database.get_connection() as connection:
@@ -230,6 +230,32 @@ class ConversationRepository:
                 (
                     conversation_id,
                 ),
+            ).fetchall()
+
+        return [dict(row) for row in rows]
+
+    def search_conversations(self, keyword: str) -> list[dict]:
+        """ Search conversations by title or message content."""
+
+        if not keyword or not keyword.strip():
+            return []
+
+        query = """
+            SELECT DISTINCT c.*
+            FROM conversations c
+            LEFT JOIN messages m
+                ON c.id = m.conversation_id
+            WHERE c.title LIKE ?
+                OR m.content LIKE ?
+            ORDER BY c.updated_at DESC
+        """
+
+        search_term = f"%{keyword.strip()}%"
+
+        with self.database.get_connection() as connection:
+            rows = connection.execute(
+                query,
+                (search_term, search_term),
             ).fetchall()
 
         return [dict(row) for row in rows]

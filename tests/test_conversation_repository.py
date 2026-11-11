@@ -157,5 +157,43 @@ class TestConversationRepository(unittest.TestCase):
                 "Invalid role",
             )
 
+    def test_search_conversations_by_title_and_message(self):
+        first = self.repository.create_conversation(
+            title="Python Learning"
+        )
+
+        second = self.repository.create_conversation(
+            title="Database Design"
+        )
+
+        self.repository.add_message(
+            first["id"],
+            "user",
+            "Explain Python decorators",
+        )
+
+        self.repository.add_message(
+            second["id"],
+            "user",
+            "Explain PostgreSQL indexing",
+        )
+
+        # Search by conversation title.
+        results = self.repository.search_conversations("Python")
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["id"], first["id"])
+
+        # Search by message content.
+        results = self.repository.search_conversations("PostgreSQL")
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["id"], second["id"])
+
+        # Case-insensitive search in standard SQLite LIKE behavior.
+        results = self.repository.search_conversations("python")
+
+        self.assertEqual(len(results), 1)
+
 if __name__ == "__main__":
     unittest.main()
