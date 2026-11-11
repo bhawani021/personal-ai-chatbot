@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from app.database import Database
 from app.repositories.conversation_repository import ConversationRepository
@@ -135,6 +136,65 @@ class TestPersistentChatbot(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             self.chatbot.chat("   ")
+
+    def test_resume_latest_conversation(self):
+        with patch(
+                "app.repositories.conversation_repository.current_timestamp",
+                return_value="2026-01-01T00:00:00.000000+00:00",
+        ):
+            self.chatbot.create_new_conversation("First")
+            self.chatbot.chat("First message")
+
+            second = self.chatbot.create_new_conversation("Second")
+            self.chatbot.chat("Second message")
+
+            resumed = self.chatbot.resume_latest_conversation()
+
+        self.assertEqual(resumed["id"], second["id"])
+
+    def test_rename_conversation(self):
+        conversation = self.chatbot.create_new_conversation()
+
+        result = self.chatbot.rename_conversation(
+            conversation["id"],
+            "My Python Learning",
+        )
+
+        self.assertTrue(result)
+
+        updated = self.repository.get_conversation(
+            conversation["id"]
+        )
+
+        self.assertEqual(updated["title"], "My Python Learning")
+
+    def test_delete_conversation(self):
+        conversation = self.chatbot.create_new_conversation()
+
+        self.chatbot.chat("Hello")
+
+        result = self.chatbot.delete_conversation(
+            conversation["id"]
+        )
+
+        self.assertTrue(result)
+        self.assertIsNone(
+            self.repository.get_conversation(conversation["id"])
+        )
+        self.assertIsNone(self.chatbot.get_current_conversation())
+
+    def test_search_conversations(self):
+        conversation = self.chatbot.create_new_conversation(
+            "Python Learning"
+        )
+
+        self.chatbot.chat("Explain Python")
+
+        results = self.chatbot.search_conversations("Python")
+
+        self.assertTrue(
+            any(item["id"] == conversation["id"] for item in results)
+        )
 
 
 if __name__ == "__main__":

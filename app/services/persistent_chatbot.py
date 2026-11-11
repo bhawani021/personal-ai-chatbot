@@ -121,3 +121,38 @@ class PersistentChatbot:
 
     def list_conversations(self) -> list[dict]:
         return self.repository.list_conversations()
+
+    def resume_latest_conversation(self) -> dict:
+        """ Resume the most recently updated conversation"""
+
+        conversations = self.repository.list_conversations()
+
+        if conversations:
+            latest = conversations[0]
+            return self.switch_conversation(latest["id"])
+
+        return self.create_new_conversation()
+
+    def rename_conversation(self, conversation_id: str, title: str) -> bool:
+        """ Rename an existing conversation"""
+        if not title or not title.strip():
+            raise ValueError("Conversation title cannot be empty")
+
+        return self.repository.update_title(
+            conversation_id,
+            title.strip(),
+        )
+
+    def delete_conversation(self, conversation_id: str) -> bool:
+        """ Delete a conversation and its associated messages"""
+
+        delete = self.repository.delete_conversation(conversation_id)
+        if delete and self.current_conversation_id == conversation_id:
+            self.current_conversation_id = None
+
+        return delete
+
+    def search_conversations(self, keyword: str) -> list[dict]:
+        """Search conversations by title or message content"""
+
+        return self.repository.search_conversations(keyword)
