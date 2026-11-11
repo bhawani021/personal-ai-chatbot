@@ -201,8 +201,15 @@ def main():
                 else:
                     print("Conversation not found.")
 
-            elif user_input.startswith("/search"):
-                keyword = user_input.split(maxsplit=1)[1]
+            elif user_input == "/search":
+                print("Usage: /search <keyword>")
+
+            elif user_input.startswith("/search "):
+                keyword = user_input.split(maxsplit=1)[1].strip()
+
+                if not keyword:
+                    print("Usage: /search <keyword>")
+                    continue
 
                 results = chatbot.search_conversations(keyword)
 
