@@ -1,8 +1,9 @@
 import sqlite3
-from pathlib import Path
 from contextlib import contextmanager
+from pathlib import Path
 
 from app.config import get_database_path
+
 
 class Database:
 

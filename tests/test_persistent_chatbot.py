@@ -4,13 +4,12 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from app.database import Database
 from app.exceptions import (
     InvalidMessageError,
     LLMServiceError,
     NoActiveConversationError,
 )
-
-from app.database import Database
 from app.repositories.conversation_repository import ConversationRepository
 from app.services.persistent_chatbot import PersistentChatbot
 
@@ -124,7 +123,7 @@ class TestPersistentChatbot(unittest.TestCase):
         first = self.chatbot.create_new_conversation()
         self.chatbot.chat("First conversation")
 
-        second = self.chatbot.create_new_conversation()
+        self.chatbot.create_new_conversation()
         self.chatbot.chat("Second conversation")
 
         self.chatbot.switch_conversation(first["id"])
@@ -145,8 +144,8 @@ class TestPersistentChatbot(unittest.TestCase):
 
     def test_resume_latest_conversation(self):
         with patch(
-                "app.repositories.conversation_repository.current_timestamp",
-                return_value="2026-01-01T00:00:00.000000+00:00",
+            "app.repositories.conversation_repository.current_timestamp",
+            return_value="2026-01-01T00:00:00.000000+00:00",
         ):
             self.chatbot.create_new_conversation("First")
             self.chatbot.chat("First message")
@@ -168,9 +167,7 @@ class TestPersistentChatbot(unittest.TestCase):
 
         self.assertTrue(result)
 
-        updated = self.repository.get_conversation(
-            conversation["id"]
-        )
+        updated = self.repository.get_conversation(conversation["id"])
 
         self.assertEqual(updated["title"], "My Python Learning")
 
@@ -179,28 +176,20 @@ class TestPersistentChatbot(unittest.TestCase):
 
         self.chatbot.chat("Hello")
 
-        result = self.chatbot.delete_conversation(
-            conversation["id"]
-        )
+        result = self.chatbot.delete_conversation(conversation["id"])
 
         self.assertTrue(result)
-        self.assertIsNone(
-            self.repository.get_conversation(conversation["id"])
-        )
+        self.assertIsNone(self.repository.get_conversation(conversation["id"]))
         self.assertIsNone(self.chatbot.get_current_conversation())
 
     def test_search_conversations(self):
-        conversation = self.chatbot.create_new_conversation(
-            "Python Learning"
-        )
+        conversation = self.chatbot.create_new_conversation("Python Learning")
 
         self.chatbot.chat("Explain Python")
 
         results = self.chatbot.search_conversations("Python")
 
-        self.assertTrue(
-            any(item["id"] == conversation["id"] for item in results)
-        )
+        self.assertTrue(any(item["id"] == conversation["id"] for item in results))
 
     def test_chat_without_active_conversation(self):
         with self.assertRaises(NoActiveConversationError):
@@ -221,9 +210,7 @@ class TestPersistentChatbot(unittest.TestCase):
         with self.assertRaises(LLMServiceError):
             chatbot.chat("Hello")
 
-        messages = self.repository.get_messages(
-            conversation["id"]
-        )
+        messages = self.repository.get_messages(conversation["id"])
 
         self.assertEqual(messages, [])
 
@@ -256,12 +243,11 @@ class TestPersistentChatbot(unittest.TestCase):
                 ],
             )
 
-        messages = self.repository.get_messages(
-            conversation["id"]
-        )
+        messages = self.repository.get_messages(conversation["id"])
 
         # The user message must also have rolled back.
         self.assertEqual(messages, [])
+
 
 if __name__ == "__main__":
     unittest.main()

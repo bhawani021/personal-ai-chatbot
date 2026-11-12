@@ -20,14 +20,10 @@ class PersistentChatbot:
     LLMService handles communication with Ollama.
     """
 
-    def __init__(
-            self,
-            repository: ConversationRepository,
-            llm_service=None
-    ):
+    def __init__(self, repository: ConversationRepository, llm_service=None):
         self.repository = repository
         self.llm_service = llm_service or LLMService()
-        self.current_conversation_id = None
+        self.current_conversation_id: str | None = None
 
     def create_new_conversation(self, title="New conversation") -> dict:
 
@@ -38,10 +34,7 @@ class PersistentChatbot:
 
         self.current_conversation_id = conversation["id"]
 
-        logger.info(
-            "Created conversation: %s",
-            conversation["id"]
-        )
+        logger.info("Created conversation: %s", conversation["id"])
 
         return conversation
 
@@ -63,9 +56,7 @@ class PersistentChatbot:
         if not self.current_conversation_id:
             return None
 
-        return self.repository.get_conversation(
-            self.current_conversation_id
-        )
+        return self.repository.get_conversation(self.current_conversation_id)
 
     def chat(self, user_message: str) -> str:
         if not user_message or not user_message.strip():
@@ -78,19 +69,19 @@ class PersistentChatbot:
                 "No active conversation. Create or open a conversation first."
             )
 
+        if self.current_conversation_id is None:
+            raise NoActiveConversationError(
+                "No active conversation. Create or open a conversation first."
+            )
+        conversation_id = self.current_conversation_id
+
         # 1. Load existing messages from SQLite
-        stored_messages = self.repository.get_messages(
-            self.current_conversation_id
-        )
+        stored_messages = self.repository.get_messages(conversation_id)
 
         # 2. Prepare for LLM context
-        system_prompt = (
-                conversation["system_prompt"] or SYSTEM_PROMPT
-        )
+        system_prompt = conversation["system_prompt"] or SYSTEM_PROMPT
 
-        llm_messages = [
-            {"role": "system", "content": system_prompt}
-        ]
+        llm_messages = [{"role": "system", "content": system_prompt}]
 
         llm_messages.extend(
             {
@@ -110,36 +101,28 @@ class PersistentChatbot:
 
         # 4. Get the LLM response
         # IF Ollama fails, neither message is persisted
-        assistant_response = self.llm_service.generate(
-            llm_messages
-        )
+        assistant_response = self.llm_service.generate(llm_messages)
 
         # 5. Persist both messages after successful generation
         self.repository.add_messages(
-            self.current_conversation_id,
+            conversation_id,
             [
-                {
-                    "role": "user",
-                    "content": user_message.strip()
-                },
+                {"role": "user", "content": user_message.strip()},
                 {
                     "role": "assistant",
                     "content": assistant_response,
-                }
+                },
             ],
         )
 
         # 6. Automatically name a new conversation using it;s first message
         if not stored_messages:
             title = user_message.strip().replace("\n", " ")[:50]
-            self.repository.update_title(
-                self.current_conversation_id,
-                title or "New conversation"
-            )
+            self.repository.update_title(conversation_id, title or "New conversation")
 
         logger.info(
             "Completed chat exchange for conversation: %s",
-            self.current_conversation_id,
+            conversation_id,
         )
 
         return assistant_response
@@ -154,7 +137,7 @@ class PersistentChatbot:
         return self.repository.list_conversations()
 
     def resume_latest_conversation(self) -> dict:
-        """ Resume the most recently updated conversation"""
+        """Resume the most recently updated conversation"""
 
         conversations = self.repository.list_conversations()
 
@@ -164,7 +147,7 @@ class PersistentChatbot:
         return self.create_new_conversation()
 
     def rename_conversation(self, conversation_id: str, title: str) -> bool:
-        """ Rename an existing conversation"""
+        """Rename an existing conversation"""
         if not title or not title.strip():
             raise InvalidMessageError("Conversation title cannot be empty")
 
@@ -181,7 +164,7 @@ class PersistentChatbot:
         return True
 
     def delete_conversation(self, conversation_id: str) -> bool:
-        """ Delete a conversation and its associated messages"""
+        """Delete a conversation and its associated messages"""
 
         deleted = self.repository.delete_conversation(conversation_id)
 

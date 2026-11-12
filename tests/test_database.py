@@ -1,6 +1,5 @@
 import tempfile
 import unittest
-
 from pathlib import Path
 
 from app.database import Database
@@ -10,20 +9,16 @@ class TestDatabase(unittest.TestCase):
 
     def test_database_initialization(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            database = Database(
-                Path(temp_dir) / "test.db"
-            )
+            database = Database(Path(temp_dir) / "test.db")
 
             database.initialize()
 
             with database.get_connection() as connection:
-                tables = connection.execute(
-                    """
+                tables = connection.execute("""
                     SELECT name
                     FROM sqlite_master
                     WHERE type = 'table'
-                    """
-                ).fetchall()
+                    """).fetchall()
 
             table_names = {row["name"] for row in tables}
 
@@ -32,26 +27,20 @@ class TestDatabase(unittest.TestCase):
 
     def test_foreign_key_cascade(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            database = Database(
-                Path(temp_dir) / "test.db"
-            )
+            database = Database(Path(temp_dir) / "test.db")
             database.initialize()
 
             with database.get_connection() as connection:
-                connection.execute(
-                    """
+                connection.execute("""
                     INSERT INTO conversations
                     VALUES ('test-id', 'Test', NULL, 'now', 'now')
-                    """
-                )
+                    """)
 
-                connection.execute(
-                    """
+                connection.execute("""
                     INSERT INTO messages
                     (conversation_id, role, content, created_at)
                     VALUES ('test-id', 'user', 'Hello', 'now')
-                    """
-                )
+                    """)
 
                 connection.execute(
                     "DELETE FROM conversations WHERE id = ?",

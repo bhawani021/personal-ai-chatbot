@@ -7,16 +7,14 @@ from app.exceptions import LLMServiceError
 
 logger = logging.getLogger(__name__)
 
+
 class LLMService:
     """
     Responsible for communicating with the local
     Ollama model
     """
 
-    def __init__(
-            self,
-            model=OLLAMA_MODEL,
-            host = OLLAMA_HOST):
+    def __init__(self, model=OLLAMA_MODEL, host=OLLAMA_HOST):
 
         self.moel = model
         self.client = Client(host=host)
