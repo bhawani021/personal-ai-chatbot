@@ -15,10 +15,15 @@ from app.services.persistent_chatbot import PersistentChatbot
 
 
 class FakeLLMService:
-    """Simulates Ollama responses for testing."""
 
     def generate(self, messages):
         return f"Mock response to: {messages[-1]['content']}"
+
+    def generate_stream(self, messages):
+        response = self.generate(messages)
+
+        for word in response.split(" "):
+            yield word + " "
 
 
 class TestPersistentChatbot(unittest.TestCase):
@@ -247,6 +252,83 @@ class TestPersistentChatbot(unittest.TestCase):
 
         # The user message must also have rolled back.
         self.assertEqual(messages, [])
+
+    def test_chat_stream_returns_chunks(self):
+        self.chatbot.create_new_conversation()
+
+        chunks = list(self.chatbot.chat_stream("What is Python?"))
+
+        response = "".join(chunks)
+
+        self.assertIn("Mock response", response)
+
+        history = self.chatbot.get_history()
+
+        self.assertEqual(len(history), 2)
+        self.assertEqual(history[0]["role"], "user")
+        self.assertEqual(history[1]["role"], "assistant")
+
+    def test_streaming_failure_does_not_persist_exchange(self):
+        class FailingStreamLLM:
+
+            def generate_stream(self, messages):
+                yield "Partial response"
+
+                raise LLMServiceError("Connection lost")
+
+        chatbot = PersistentChatbot(
+            repository=self.repository,
+            llm_service=FailingStreamLLM(),
+        )
+
+        conversation = chatbot.create_new_conversation()
+
+        with self.assertRaises(LLMServiceError):
+            list(chatbot.chat_stream("Hello"))
+
+        history = self.repository.get_messages(conversation["id"])
+
+        self.assertEqual(history, [])
+
+    def test_streaming_uses_previous_conversation_history(self):
+        class InspectingStreamLLM:
+
+            def __init__(self):
+                self.received_messages = None
+
+            def generate(self, messages):
+                return "First response"
+
+            def generate_stream(self, messages):
+                self.received_messages = messages
+                yield "Alex"
+
+        llm = InspectingStreamLLM()
+
+        chatbot = PersistentChatbot(
+            repository=self.repository,
+            llm_service=llm,
+        )
+
+        chatbot.create_new_conversation()
+
+        chatbot.chat("My name is Alex.")
+
+        list(chatbot.chat_stream("What is my name?"))
+
+        self.assertEqual(
+            llm.received_messages[-3]["content"],
+            "My name is Alex.",
+        )
+        self.assertEqual(
+            llm.received_messages[-2]["content"],
+            "First response",
+        )
+
+        self.assertEqual(
+            llm.received_messages[-1]["content"],
+            "What is my name?",
+        )
 
 
 if __name__ == "__main__":

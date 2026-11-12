@@ -4,6 +4,7 @@ from app.config import SYSTEM_PROMPT
 from app.exceptions import (
     ConversationNotFoundError,
     InvalidMessageError,
+    LLMServiceError,
     NoActiveConversationError,
 )
 from app.repositories.conversation_repository import ConversationRepository
@@ -126,6 +127,85 @@ class PersistentChatbot:
         )
 
         return assistant_response
+
+    def chat_stream(self, user_message: str):
+        """
+        Generate a response incrementally and persist the
+        complete user-assistant exchange after successful completion
+        """
+
+        if not isinstance(user_message, str) or not user_message.strip():
+            raise InvalidMessageError("Message cannot be empty")
+
+        conversation = self.get_current_conversation()
+
+        if conversation is None:
+            raise NoActiveConversationError("Create or open a conversation first")
+
+        if self.current_conversation_id is None:
+            raise NoActiveConversationError("Create or open a conversation first")
+        conversation_id = self.current_conversation_id
+
+        user_message = user_message.strip()
+
+        stored_messages = self.repository.get_messages(conversation_id)
+
+        system_prompt = conversation["system_prompt"] or SYSTEM_PROMPT
+
+        messages = [
+            {
+                "role": "system",
+                "content": system_prompt,
+            }
+        ]
+
+        messages.extend(
+            {"role": message["role"], "content": message["content"]}
+            for message in stored_messages
+        )
+
+        messages.append(
+            {
+                "role": "user",
+                "content": user_message,
+            }
+        )
+
+        response_parts = []
+
+        # Generate and display chunks incrementally.
+        for chunk in self.llm_service.generate_stream(messages):
+            response_parts.append(chunk)
+            yield chunk
+
+        assistant_response = "".join(response_parts).strip()
+
+        if not assistant_response:
+            raise LLMServiceError("The LLM returned an empty response")
+
+        # Save only after the complete response has been generated
+        self.repository.add_messages(
+            conversation_id,
+            [
+                {
+                    "role": "user",
+                    "content": user_message,
+                },
+                {"role": "assistant", "content": assistant_response},
+            ],
+        )
+
+        if not stored_messages:
+            title = user_message.replace("\n", " ")[:50]
+
+            self.repository.update_title(
+                conversation_id,
+                title or "New conversation",
+            )
+
+        logger.info(
+            "Streaming exchange completed for conversation: %s", conversation_id
+        )
 
     def get_history(self) -> list[dict]:
         if not self.current_conversation_id:

@@ -31,6 +31,11 @@ def validate_config():
     if not DATABASE_PATH:
         raise ConfigureError("DATABASE_PATH cannot be empty.")
 
+    SYSTEM_PROMPT = os.getenv(
+        "SYSTEM_PROMPT",
+        "You are a helpful AI assistant.",
+    ).strip()
+
     if not SYSTEM_PROMPT:
         raise ConfigureError("SYSTEM_PROMPT cannot be empty.")
 

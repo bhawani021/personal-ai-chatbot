@@ -229,8 +229,15 @@ def main():
                 print("Unknown command. Type /help for commands.")
 
             else:
-                response = chatbot.chat(user_input)
-                print(f"\nAssistant: {response}")
+                # response = chatbot.chat(user_input)
+                # print(f"\nAssistant: {response}")
+
+                print("\nAssistant: ", end="", flush=True)
+
+                for chunk in chatbot.chat_stream(user_input):
+                    print(chunk, end="", flush=True)
+
+                print()
 
         except ChatbotError as error:
             print(f"\nApplication error: {error}")

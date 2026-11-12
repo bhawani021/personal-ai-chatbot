@@ -16,7 +16,7 @@ class LLMService:
 
     def __init__(self, model=OLLAMA_MODEL, host=OLLAMA_HOST):
 
-        self.moel = model
+        self.model = model
         self.client = Client(host=host)
 
     def generate(self, messages: list[dict]) -> str:
@@ -24,7 +24,7 @@ class LLMService:
         Ollama and return  its response"""
         try:
             response = self.client.chat(
-                model=self.moel,
+                model=self.model,
                 messages=messages,
             )
 
@@ -44,3 +44,35 @@ class LLMService:
             raise LLMServiceError(
                 "Unable to generate a reponse from the LLM"
             ) from error
+
+    def generate_stream(self, messages: list[dict]):
+        """
+        Generate an LLM response incrementally.
+
+        Yields text chunks as they arrive from Ollama
+        """
+
+        try:
+            response_stream = self.client.chat(
+                model=self.model,
+                messages=messages,
+                stream=True,
+            )
+
+            received_content = False
+
+            for chunk in response_stream:
+                content = chunk.message.content
+
+                if content:
+                    received_content = True
+                    yield content
+
+            if not received_content:
+                raise LLMServiceError("The LLM returned an empty response.")
+        except LLMServiceError:
+            raise
+        except Exception as error:
+            logger.exception("LLM steaming request failed")
+
+            raise LLMServiceError("Unable to steam a response from the LLM") from error
