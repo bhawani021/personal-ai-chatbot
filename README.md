@@ -1,11 +1,11 @@
 # Personal AI Chatbot
 
-A command-line personal assistant built in Python and connected to a local
-[Ollama](https://ollama.com/) model.
+A command-line personal assistant built in Python, powered by a local
+[Ollama](https://ollama.com/) model, with conversations persisted in SQLite.
 
 ## Requirements
 
-- Python 3
+- Python 3.11 or newer
 - Ollama installed and running locally
 
 ## Install Ollama on macOS
@@ -13,11 +13,10 @@ A command-line personal assistant built in Python and connected to a local
 1. Download the [Ollama macOS app](https://ollama.com/download/mac).
 2. Open the downloaded disk image, move Ollama to **Applications**, and launch
    the app. Complete its first-run setup.
-3. Keep Ollama running while using this chatbot. The app provides a local
-   server at `http://localhost:11434`, which is the default address used by
-   this project.
+3. Keep Ollama running while using this chatbot. Its local server defaults to
+   `http://localhost:11434`.
 
-In Terminal, check that the command-line tool is available:
+Check that the command-line tool is available:
 
 ```bash
 ollama --version
@@ -25,7 +24,8 @@ ollama --version
 
 ## Setup
 
-Clone the repository, then create and activate a virtual environment:
+From the repository root, create and activate a virtual environment and install
+the application and development dependencies:
 
 ```bash
 python3 -m venv venv
@@ -33,101 +33,34 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Copy the example configuration and download the configured model:
+Copy the example configuration and download the example model:
 
 ```bash
 cp .env.example .env
 ollama pull llama3.2:3b
 ```
 
-You can optionally test the model directly in Ollama before starting the
-chatbot:
+You can optionally test the model directly in Ollama:
 
 ```bash
 ollama run llama3.2:3b
 ```
 
-The `.env` file supports these settings:
+### Configuration
 
-| Variable        | Default                  | Description             |
-|-----------------|--------------------------|-------------------------|
-| `OLLAMA_MODEL`  | `llama3.2:latest`        | Ollama model name       |
-| `OLLAMA_HOST`   | `http://localhost:11434` | Ollama server URL       |
-| `DATABASE_PATH` | `data/chatbot.db`        | SQLite database file    |
+The application loads settings from `.env`. Environment variables take
+precedence over the defaults shown below.
 
-The example `.env` selects `llama3.2:3b`. Update the model setting and pull a
-different model if needed.
+| Variable | Default | Description |
+|---|---|---|
+| `OLLAMA_MODEL` | `llama3.2:latest` | Ollama model name |
+| `OLLAMA_HOST` | `http://localhost:11434` | Ollama server URL |
+| `DATABASE_PATH` | `data/chatbot.db` | SQLite database file |
+| `SYSTEM_PROMPT` | `You are a helpful AI assistant.` | System instructions sent to the model |
+| `LOG_LEVEL` | `INFO` | Logging level: `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL` |
 
-## Repository structure
-
-```text
-personal-ai-chatbot/
-├── app/
-│   ├── chatbot.py                 # earlier in-memory chatbot
-│   ├── config.py
-│   ├── database.py
-│   ├── repositories/
-│   │   └── conversation_repository.py
-│   └── services/
-│       ├── context_manager.py     # placeholder
-│       ├── conversation_service.py # placeholder
-│       ├── llm_service.py
-│       └── persistent_chatbot.py
-├── data/                         # generated locally; ignored by Git
-│   └── chatbot.db
-├── tests/
-│   ├── test_conversation_repository.py
-│   ├── test_persistent_chatbot.py
-│   └── run_manual.py
-├── .env.example
-├── main.py
-└── requirements.txt
-```
-
-## Architecture
-
-- `main.py` initializes the SQLite database, repository, and persistent
-  chatbot, then runs the interactive command loop.
-- `app/config.py` loads Ollama and SQLite settings from `.env`.
-- `app/database.py` creates the schema and manages SQLite connections.
-- `app/repositories/conversation_repository.py` provides CRUD operations for
-  conversations and their messages, including search and atomic message batches.
-- `app/services/persistent_chatbot.py` loads stored history, builds the LLM
-  request, manages conversations, and saves user/assistant messages together
-  after a successful response.
-- `app/services/llm_service.py` sends chat requests to the configured Ollama
-  model.
-- `app/services/context_manager.py` and
-  `app/services/conversation_service.py` are placeholders. `app/chatbot.py` is
-  the earlier in-memory implementation; the CLI now uses `PersistentChatbot`.
-
-## SQLite conversation storage
-
-The SQLite database is initialized by `Database.initialize()` at the path
-configured by `DATABASE_PATH`. It creates:
-
-- `conversations` for conversation IDs, titles, system prompts, and timestamps.
-- `messages` for user and assistant messages, with a foreign key that deletes
-  associated messages when a conversation is deleted.
-
-`ConversationRepository` provides operations to create, retrieve, list, rename,
-delete, and search conversations, and to add or retrieve their messages.
-Conversation message pairs are saved in one transaction. The database file is
-local and the default `data/` directory is ignored by Git. The CLI creates a
-new conversation at startup; use `/list` and `/open <id>` to return to saved
-conversations.
-
-To run the repository example from the project root:
-
-```bash
-PYTHONPATH=. python tests/run_manual.py
-```
-
-The example writes to the configured database. Run all automated tests with:
-
-```bash
-python -m unittest discover -s tests -v
-```
+The example `.env` selects `llama3.2:3b`. If you change the model, pull that
+model with `ollama pull <model-name>`.
 
 ## Run
 
@@ -137,26 +70,118 @@ With the virtual environment active and Ollama running:
 python main.py
 ```
 
-The app starts a new conversation when it launches. The interactive prompt
-supports:
+The CLI starts a new conversation each time it launches. Use `/list` and
+`/open <id>` to return to a saved conversation.
 
-| Command            | Purpose                                                 |
-|--------------------|---------------------------------------------------------|
-| `/new`             | Create a new conversation                               |
-| `/list`            | List saved conversations                                |
-| `/open <id>`       | Open a saved conversation                               |
-| `/rename <title>`  | Rename the active conversation                         |
-| `/delete [id]`     | Delete the active or specified conversation (confirmed) |
-| `/search <keyword>`| Search conversation titles and messages                 |
-| `/history`         | Show the active conversation's messages                |
-| `/info`            | Show active conversation details and message counts     |
-| `/help`            | Show the command list                                   |
-| `/exit`            | Exit the chatbot                                        |
+| Command | Purpose |
+|---|---|
+| `/new` | Create a new conversation |
+| `/list` | List saved conversations |
+| `/open <id>` | Open a saved conversation |
+| `/rename <title>` | Rename the active conversation |
+| `/delete [id]` | Delete the active or specified conversation after confirmation |
+| `/search <keyword>` | Search conversation titles and messages |
+| `/history` | Show the active conversation's messages |
+| `/info` | Show conversation details and message counts |
+| `/help` | Show the command list |
+| `/exit` | Exit the chatbot |
 
-## Current limitations
+## Architecture
 
-Conversation orchestration currently lives in `PersistentChatbot`; the
-`ConversationService` and `ContextManager` modules have not been implemented
-yet. The chatbot starts a new conversation each time the app launches; open a
-saved conversation with `/open <id>`. If an Ollama request fails, the current
-user message is not saved.
+- `main.py` validates configuration, initializes logging and SQLite, creates
+  the repository and chatbot, and runs the interactive command loop.
+- `app/config.py` loads and validates the Ollama, database, prompt, and logging
+  settings.
+- `app/database.py` creates the SQLite schema and manages database connections.
+- `app/repositories/conversation_repository.py` provides conversation and
+  message persistence, search, and atomic message batches.
+- `app/services/persistent_chatbot.py` manages conversation state, builds LLM
+  context from stored messages, and saves each user/assistant exchange after a
+  successful response.
+- `app/services/llm_service.py` sends requests to the configured Ollama model.
+- `app/exceptions.py` defines application-level errors, and
+  `app/logging_config.py` configures console and file logging. Logs are written
+  to `logs/chatbot.log`.
+- `app/chatbot.py` contains the earlier in-memory chatbot. The CLI uses
+  `PersistentChatbot`; `app/services/context_manager.py` and
+  `app/services/conversation_service.py` are placeholders.
+
+## Repository structure
+
+```text
+personal-ai-chatbot/
+├── app/
+│   ├── chatbot.py
+│   ├── config.py
+│   ├── database.py
+│   ├── exceptions.py
+│   ├── logging_config.py
+│   ├── repositories/
+│   │   └── conversation_repository.py
+│   └── services/
+│       ├── context_manager.py       # placeholder
+│       ├── conversation_service.py  # placeholder
+│       ├── llm_service.py
+│       └── persistent_chatbot.py
+├── tests/
+│   ├── run_manual.py
+│   ├── test_config.py
+│   ├── test_conversation_repository.py
+│   ├── test_database.py
+│   ├── test_llm_service.py
+│   ├── test_main.py
+│   └── test_persistent_chatbot.py
+├── .env.example
+├── main.py
+├── pyproject.toml
+└── requirements.txt
+```
+
+The database and log files are generated locally and ignored by Git.
+
+## SQLite conversation storage
+
+The database is initialized by `Database.initialize()` at the path configured
+by `DATABASE_PATH`. It creates:
+
+- `conversations` for conversation IDs, titles, system prompts, and timestamps.
+- `messages` for user and assistant messages, with a foreign key that deletes
+  associated messages when a conversation is deleted.
+
+`ConversationRepository` creates, retrieves, lists, renames, deletes, and
+searches conversations, and adds or retrieves their messages. Both messages in
+a chat exchange are saved in one transaction. If an Ollama request fails, that
+exchange is not persisted.
+
+To run the repository example from the project root (it writes to the
+configured database):
+
+```bash
+PYTHONPATH=. python tests/run_manual.py
+```
+
+## Tests and code quality
+
+Run the unit tests:
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+The LLM service is mocked in unit tests, so Ollama does not need to be running
+to run the test suite.
+
+Formatting, linting, and type-checking settings are in `pyproject.toml`:
+
+```bash
+ruff check app tests main.py
+black --check app tests main.py
+mypy app main.py
+```
+
+To measure test coverage:
+
+```bash
+coverage run -m unittest discover -s tests
+coverage report
+```
