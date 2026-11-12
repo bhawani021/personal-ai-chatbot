@@ -1,7 +1,8 @@
 # Personal AI Chatbot
 
 A command-line personal assistant built in Python, powered by a local
-[Ollama](https://ollama.com/) model, with conversations persisted in SQLite.
+[Ollama](https://ollama.com/) model, with streaming responses and conversations
+persisted in SQLite.
 
 ## Requirements
 
@@ -86,6 +87,13 @@ The CLI starts a new conversation each time it launches. Use `/list` and
 | `/help` | Show the command list |
 | `/exit` | Exit the chatbot |
 
+### Streaming responses
+
+Chat responses are streamed to the terminal as Ollama generates them. The
+completed user/assistant exchange is saved to SQLite only after the stream
+finishes successfully. If generation fails, the partial response is not saved
+as conversation history.
+
 ## Architecture
 
 - `main.py` validates configuration, initializes logging and SQLite, creates
@@ -96,9 +104,10 @@ The CLI starts a new conversation each time it launches. Use `/list` and
 - `app/repositories/conversation_repository.py` provides conversation and
   message persistence, search, and atomic message batches.
 - `app/services/persistent_chatbot.py` manages conversation state, builds LLM
-  context from stored messages, and saves each user/assistant exchange after a
-  successful response.
-- `app/services/llm_service.py` sends requests to the configured Ollama model.
+  context from stored messages, streams response chunks, and saves each
+  user/assistant exchange after a complete successful response.
+- `app/services/llm_service.py` sends requests to the configured Ollama model
+  and yields streaming response chunks.
 - `app/exceptions.py` defines application-level errors, and
   `app/logging_config.py` configures console and file logging. Logs are written
   to `logs/chatbot.log`.
@@ -150,8 +159,9 @@ by `DATABASE_PATH`. It creates:
 
 `ConversationRepository` creates, retrieves, lists, renames, deletes, and
 searches conversations, and adds or retrieves their messages. Both messages in
-a chat exchange are saved in one transaction. If an Ollama request fails, that
-exchange is not persisted.
+a chat exchange are saved in one transaction after a streamed response
+completes successfully. If an Ollama request fails mid-stream, any partial text
+already shown in the terminal is not persisted as conversation history.
 
 To run the repository example from the project root (it writes to the
 configured database):
@@ -168,8 +178,8 @@ Run the unit tests:
 python -m unittest discover -s tests -v
 ```
 
-The LLM service is mocked in unit tests, so Ollama does not need to be running
-to run the test suite.
+The LLM service is mocked in unit tests, including streaming behavior, so
+Ollama does not need to be running to run the test suite.
 
 Formatting, linting, and type-checking settings are in `pyproject.toml`:
 

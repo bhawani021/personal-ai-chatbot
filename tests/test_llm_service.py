@@ -57,6 +57,31 @@ class TestLLMService(unittest.TestCase):
         with self.assertRaises(LLMServiceError):
             service.generate([{"role": "user", "content": "Hello"}])
 
+    @patch("app.services.llm_service.Client")
+    def test_generate_stream(self, mock_client_class):
+        mock_client = Mock()
+
+        mock_client.chat.return_value = iter(
+            [
+                SimpleNamespace(message=SimpleNamespace(content="Hello")),
+                SimpleNamespace(message=SimpleNamespace(content=" there")),
+                SimpleNamespace(message=SimpleNamespace(content="!")),
+            ]
+        )
+
+        mock_client_class.return_value = mock_client
+
+        service = LLMService()
+
+        chunks = list(
+            service.generate_stream([{"role": "user", "content": "Say hello"}])
+        )
+
+        self.assertEqual(chunks, ["Hello", " there", "!"])
+
+        mock_client.chat.assert_called_once()
+        self.assertTrue(mock_client.chat.call_args.kwargs["stream"])
+
 
 if __name__ == "__main__":
     unittest.main()
