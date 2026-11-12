@@ -11,9 +11,7 @@ def main():
     repository = ConversationRepository(database)
 
     # 1. Create conversation
-    conversation = repository.create_conversation(
-        title="Learning AI and Python"
-    )
+    conversation = repository.create_conversation(title="Learning AI and Python")
 
     conversation_id = conversation["id"]
 

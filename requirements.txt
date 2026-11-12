@@ -1,2 +1,11 @@
 ollama
 python-dotenv
+
+# Linting and import cleanup. Detects common code quality issues
+ruff
+# Automatic code formatting. Consistent formatting across the project
+black
+# Static type checking. Finds potential type-related problems.
+mypy
+# Test coverage measurement. Shows which code has actually been tested
+coverage

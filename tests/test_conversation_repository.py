@@ -1,13 +1,13 @@
 import sqlite3
 import tempfile
 import unittest
-
 from pathlib import Path
 
 from app.database import Database
 from app.repositories.conversation_repository import (
     ConversationRepository,
 )
+
 
 class TestConversationRepository(unittest.TestCase):
 
@@ -16,20 +16,14 @@ class TestConversationRepository(unittest.TestCase):
         self.addCleanup(self.temp_dir.cleanup)
 
         self.database = Database()
-        self.database.db_path = (
-                Path(self.temp_dir.name) / "test_chatbot.db"
-        )
+        self.database.db_path = Path(self.temp_dir.name) / "test_chatbot.db"
 
         self.database.initialize()
 
-        self.repository = ConversationRepository(
-            self.database
-        )
+        self.repository = ConversationRepository(self.database)
 
     def test_create_conversation(self):
-        conversation = self.repository.create_conversation(
-            title="Python Learning"
-        )
+        conversation = self.repository.create_conversation(title="Python Learning")
 
         self.assertIsNotNone(conversation)
         self.assertEqual(
@@ -38,9 +32,7 @@ class TestConversationRepository(unittest.TestCase):
         )
 
     def test_add_and_get_messages(self):
-        conversation = self.repository.create_conversation(
-            title="Test Chat"
-        )
+        conversation = self.repository.create_conversation(title="Test Chat")
 
         conversation_id = conversation["id"]
 
@@ -56,18 +48,14 @@ class TestConversationRepository(unittest.TestCase):
             "Python is a programming language.",
         )
 
-        messages = self.repository.get_messages(
-            conversation_id
-        )
+        messages = self.repository.get_messages(conversation_id)
 
         self.assertEqual(len(messages), 2)
         self.assertEqual(messages[0]["role"], "user")
         self.assertEqual(messages[1]["role"], "assistant")
 
     def test_add_messages_rolls_back_as_a_batch(self):
-        conversation = self.repository.create_conversation(
-            title="Atomic Chat"
-        )
+        conversation = self.repository.create_conversation(title="Atomic Chat")
 
         with self.database.get_connection() as connection:
             connection.execute("""
@@ -83,8 +71,8 @@ class TestConversationRepository(unittest.TestCase):
             self.repository.add_messages(
                 conversation["id"],
                 [
-                    ("user", "Hello"),
-                    ("assistant", "Response"),
+                    {"role": "user", "content": "Hello"},
+                    {"role": "assistant", "content": "Response"},
                 ],
             )
 
@@ -102,9 +90,7 @@ class TestConversationRepository(unittest.TestCase):
         self.assertEqual(len(conversations), 2)
 
     def test_update_title(self):
-        conversation = self.repository.create_conversation(
-            "Old title"
-        )
+        conversation = self.repository.create_conversation("Old title")
 
         result = self.repository.update_title(
             conversation["id"],
@@ -113,16 +99,12 @@ class TestConversationRepository(unittest.TestCase):
 
         self.assertTrue(result)
 
-        updated = self.repository.get_conversation(
-            conversation["id"]
-        )
+        updated = self.repository.get_conversation(conversation["id"])
 
         self.assertEqual(updated["title"], "New title")
 
     def test_delete_conversation(self):
-        conversation = self.repository.create_conversation(
-            "Delete me"
-        )
+        conversation = self.repository.create_conversation("Delete me")
 
         conversation_id = conversation["id"]
 
@@ -132,14 +114,10 @@ class TestConversationRepository(unittest.TestCase):
             "Hello",
         )
 
-        result = self.repository.delete_conversation(
-            conversation_id
-        )
+        result = self.repository.delete_conversation(conversation_id)
 
         self.assertTrue(result)
-        self.assertIsNone(
-            self.repository.get_conversation(conversation_id)
-        )
+        self.assertIsNone(self.repository.get_conversation(conversation_id))
 
         # Verify cascade deletion.
         self.assertEqual(
@@ -158,13 +136,9 @@ class TestConversationRepository(unittest.TestCase):
             )
 
     def test_search_conversations_by_title_and_message(self):
-        first = self.repository.create_conversation(
-            title="Python Learning"
-        )
+        first = self.repository.create_conversation(title="Python Learning")
 
-        second = self.repository.create_conversation(
-            title="Database Design"
-        )
+        second = self.repository.create_conversation(title="Database Design")
 
         self.repository.add_message(
             first["id"],
@@ -194,6 +168,7 @@ class TestConversationRepository(unittest.TestCase):
         results = self.repository.search_conversations("python")
 
         self.assertEqual(len(results), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

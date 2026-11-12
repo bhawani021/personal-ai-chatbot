@@ -1,4 +1,9 @@
+import logging
+
+from app.config import LOG_LEVEL, validate_config
 from app.database import Database
+from app.exceptions import ChatbotError
+from app.logging_config import configure_logging
 from app.repositories.conversation_repository import ConversationRepository
 from app.services.persistent_chatbot import PersistentChatbot
 
@@ -71,14 +76,10 @@ def print_info(chatbot):
 
     messages = chatbot.get_history()
 
-    user_messages = sum(
-        1 for message in messages
-        if message["role"] == "user"
-    )
+    user_messages = sum(1 for message in messages if message["role"] == "user")
 
     assistant_messages = sum(
-        1 for message in messages
-        if message["role"] == "assistant"
+        1 for message in messages if message["role"] == "assistant"
     )
 
     print("\nActive Conversation Information")
@@ -94,6 +95,14 @@ def print_info(chatbot):
 
 
 def main():
+    configure_logging(level=getattr(logging, LOG_LEVEL))
+
+    validate_config()
+
+    logger = logging.getLogger(__name__)
+
+    logger.info("Starting Persistent AI chatbot")
+
     # Initialize database.
     database = Database()
     database.initialize()
@@ -128,9 +137,7 @@ def main():
 
             elif user_input == "/new":
                 conversation = chatbot.create_new_conversation()
-                print(
-                    f"New conversation created: \nID: {conversation['id']}"
-                )
+                print(f"New conversation created: \nID: {conversation['id']}")
 
             elif user_input == "/list":
                 print_conversations(chatbot.list_conversations())
@@ -139,9 +146,7 @@ def main():
                 conversation_id = user_input[6:].strip()
 
                 try:
-                    conversation = chatbot.switch_conversation(
-                        conversation_id
-                    )
+                    conversation = chatbot.switch_conversation(conversation_id)
                     print(f"Opened: {conversation['title']}")
                 except ValueError as error:
                     print(error)
@@ -155,18 +160,15 @@ def main():
 
                 title = parts[1].strip()
 
-                conversation = chatbot.get_current_conversation()
+                active_conversation = chatbot.get_current_conversation()
 
-                if conversation is None:
+                if active_conversation is None:
                     print("No active conversation")
+                    continue
 
-                chatbot.rename_conversation(
-                    conversation["id"],
-                    title
-                )
+                chatbot.rename_conversation(active_conversation["id"], title)
 
                 print(f"Conversation renamed to: {title}")
-
 
             elif user_input == "/delete" or user_input.startswith("/delete "):
                 parts = user_input.split(maxsplit=1)
@@ -174,19 +176,21 @@ def main():
                 if len(parts) == 2:
                     conversation_id = parts[1].strip()
                 else:
-                    conversation = chatbot.get_current_conversation()
+                    active_conversation = chatbot.get_current_conversation()
 
-                    if conversation is None:
+                    if active_conversation is None:
                         print("No active conversation.")
                         continue
 
-                    conversation_id = conversation["id"]
+                    conversation_id = active_conversation["id"]
 
-                confirmation = input(
-                    f"Delete conversation {conversation_id}? (y/n): "
-                ).strip().lower()
+                confirmation = (
+                    input(f"Delete conversation {conversation_id}? (y/n): ")
+                    .strip()
+                    .lower()
+                )
 
-                if confirmation != 'y':
+                if confirmation != "y":
                     print("Delete cancelled")
                     continue
 
@@ -228,12 +232,17 @@ def main():
                 response = chatbot.chat(user_input)
                 print(f"\nAssistant: {response}")
 
+        except ChatbotError as error:
+            print(f"\nApplication error: {error}")
+
         except KeyboardInterrupt:
             print("\nGoodbye!")
             break
 
-        except Exception as error:
-            print(f"\nError: {error}")
+        except Exception:
+            logger.exception("Unexpected CLI error")
+            print("\nAn unexpected error occurred. Check logs/chatbot.log.")
+
 
 if __name__ == "__main__":
     main()
