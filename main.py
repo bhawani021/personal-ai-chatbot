@@ -1,3 +1,9 @@
+import logging
+
+from app.config import validate_config, LOG_LEVEL
+from app.exceptions import ChatbotError
+from app.logging_config import configure_logging
+
 from app.database import Database
 from app.repositories.conversation_repository import ConversationRepository
 from app.services.persistent_chatbot import PersistentChatbot
@@ -94,6 +100,16 @@ def print_info(chatbot):
 
 
 def main():
+    configure_logging(
+        level=getattr(logging, LOG_LEVEL)
+    )
+
+    validate_config()
+
+    logger = logging.getLogger(__name__)
+
+    logger.info("Starting Persistent AI chatbot")
+
     # Initialize database.
     database = Database()
     database.initialize()
@@ -228,12 +244,16 @@ def main():
                 response = chatbot.chat(user_input)
                 print(f"\nAssistant: {response}")
 
+        except ChatbotError as error:
+            print(f"\nApplication error: {error}")
+
         except KeyboardInterrupt:
             print("\nGoodbye!")
             break
 
         except Exception as error:
-            print(f"\nError: {error}")
+            logger.exception("Unexpected CLI error")
+            print("\nAn unexpected error occurred. Check logs/chatbot.log.")
 
 if __name__ == "__main__":
     main()

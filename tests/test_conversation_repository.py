@@ -83,8 +83,8 @@ class TestConversationRepository(unittest.TestCase):
             self.repository.add_messages(
                 conversation["id"],
                 [
-                    ("user", "Hello"),
-                    ("assistant", "Response"),
+                    {"role": "user", "content": "Hello"},
+                    {"role": "assistant", "content": "Response"},
                 ],
             )
 

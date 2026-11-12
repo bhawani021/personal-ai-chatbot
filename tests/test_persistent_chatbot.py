@@ -1,7 +1,14 @@
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+
+from app.exceptions import (
+    InvalidMessageError,
+    LLMServiceError,
+    NoActiveConversationError,
+)
 
 from app.database import Database
 from app.repositories.conversation_repository import ConversationRepository
@@ -19,20 +26,19 @@ class TestPersistentChatbot(unittest.TestCase):
 
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp_dir.cleanup)
 
         database = Database()
         database.db_path = Path(self.temp_dir.name) / "test.db"
         database.initialize()
 
+        self.database = database
         self.repository = ConversationRepository(database)
 
         self.chatbot = PersistentChatbot(
             repository=self.repository,
             llm_service=FakeLLMService(),
         )
-
-    def tearDown(self):
-        self.temp_dir.cleanup()
 
     def test_create_conversation(self):
         conversation = self.chatbot.create_new_conversation()
@@ -134,7 +140,7 @@ class TestPersistentChatbot(unittest.TestCase):
     def test_empty_message_rejected(self):
         self.chatbot.create_new_conversation()
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(InvalidMessageError):
             self.chatbot.chat("   ")
 
     def test_resume_latest_conversation(self):
@@ -196,6 +202,66 @@ class TestPersistentChatbot(unittest.TestCase):
             any(item["id"] == conversation["id"] for item in results)
         )
 
+    def test_chat_without_active_conversation(self):
+        with self.assertRaises(NoActiveConversationError):
+            self.chatbot.chat("Hello")
+
+    def test_llm_failure_does_not_save_messages(self):
+        class FailingLLM:
+            def generate(self, messages):
+                raise LLMServiceError("LLM unavailable")
+
+        chatbot = PersistentChatbot(
+            repository=self.repository,
+            llm_service=FailingLLM(),
+        )
+
+        conversation = chatbot.create_new_conversation()
+
+        with self.assertRaises(LLMServiceError):
+            chatbot.chat("Hello")
+
+        messages = self.repository.get_messages(
+            conversation["id"]
+        )
+
+        self.assertEqual(messages, [])
+
+    def test_invalid_message(self):
+        self.chatbot.create_new_conversation()
+
+        with self.assertRaises(InvalidMessageError):
+            self.chatbot.chat("   ")
+
+    def test_exchange_is_persisted_atomically(self):
+        conversation = self.chatbot.create_new_conversation()
+
+        # Force the assistant-message insertion to fail.
+        with self.database.get_connection() as connection:
+            connection.execute("""
+                CREATE TRIGGER reject_assistant_message
+                BEFORE INSERT ON messages
+                WHEN NEW.role = 'assistant'
+                BEGIN
+                    SELECT RAISE(ABORT, 'Test failure');
+                END;
+            """)
+
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.repository.add_messages(
+                conversation["id"],
+                [
+                    {"role": "user", "content": "Hello"},
+                    {"role": "assistant", "content": "Hi"},
+                ],
+            )
+
+        messages = self.repository.get_messages(
+            conversation["id"]
+        )
+
+        # The user message must also have rolled back.
+        self.assertEqual(messages, [])
 
 if __name__ == "__main__":
     unittest.main()
