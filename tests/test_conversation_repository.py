@@ -54,6 +54,29 @@ class TestConversationRepository(unittest.TestCase):
         self.assertEqual(messages[0]["role"], "user")
         self.assertEqual(messages[1]["role"], "assistant")
 
+    def test_record_usage_and_get_summary(self):
+        conversation = self.repository.create_conversation()
+        self.repository.record_usage(
+            conversation_id=conversation["id"],
+            context_data={
+                "estimated_prompt_tokens": 120,
+                "context_window_tokens": 4096,
+                "max_input_tokens": 3456,
+                "usage_percent": 3.47,
+            },
+            llm_metrics={
+                "actual_prompt_tokens": 100,
+                "generated_tokens": 25,
+            },
+        )
+
+        summary = self.repository.get_usage_summary(conversation["id"])
+
+        self.assertEqual(summary["request_count"], 1)
+        self.assertEqual(summary["total_estimated_tokens"], 120)
+        self.assertEqual(summary["total_actual_prompt_tokens"], 100)
+        self.assertEqual(summary["total_generated_tokens"], 25)
+
     def test_add_messages_rolls_back_as_a_batch(self):
         conversation = self.repository.create_conversation(title="Atomic Chat")
 

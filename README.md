@@ -58,6 +58,10 @@ precedence over the defaults shown below.
 | `OLLAMA_HOST` | `http://localhost:11434` | Ollama server URL |
 | `DATABASE_PATH` | `data/chatbot.db` | SQLite database file |
 | `SYSTEM_PROMPT` | `You are a helpful AI assistant.` | System instructions sent to the model |
+| `CONTEXT_WINDOW_TOKENS` | `8192` | Ollama context window size |
+| `MAX_OUTPUT_TOKENS` | `1024` | Maximum response tokens |
+| `CONTEXT_WARNING_PERCENT` | `80` | Context usage percentage that triggers a warning |
+| `CONTEXT_SAFETY_MARGIN` | `256` | Tokens reserved beyond the input and output budgets |
 | `LOG_LEVEL` | `INFO` | Logging level: `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL` |
 
 The example `.env` selects `llama3.2:3b`. If you change the model, pull that
@@ -84,6 +88,8 @@ The CLI starts a new conversation each time it launches. Use `/list` and
 | `/search <keyword>` | Search conversation titles and messages |
 | `/history` | Show the active conversation's messages |
 | `/info` | Show conversation details and message counts |
+| `/context` | Show estimated context usage and remaining input budget |
+| `/usage` | Show recorded token usage totals for the active conversation |
 | `/help` | Show the command list |
 | `/exit` | Exit the chatbot |
 
@@ -93,6 +99,20 @@ Chat responses are streamed to the terminal as Ollama generates them. The
 completed user/assistant exchange is saved to SQLite only after the stream
 finishes successfully. If generation fails, the partial response is not saved
 as conversation history.
+
+## Token and context tracking
+
+The chatbot estimates prompt tokens from message character counts to check the
+input budget before sending a request. This estimate is approximate, not an
+exact tokenizer result. The input budget is the configured context window
+minus the maximum output and safety margin. Requests estimated to exceed that
+budget are rejected; usage at or above `CONTEXT_WARNING_PERCENT` is logged as a
+warning.
+
+Ollama receives the configured context and output limits. After successful
+generation, the app records the estimated prompt size and any actual token and
+duration metrics returned by Ollama. `/context` displays current estimated
+usage, and `/usage` summarizes recorded requests for the active conversation.
 
 ## Architecture
 
@@ -104,10 +124,12 @@ as conversation history.
 - `app/repositories/conversation_repository.py` provides conversation and
   message persistence, search, and atomic message batches.
 - `app/services/persistent_chatbot.py` manages conversation state, builds LLM
-  context from stored messages, streams response chunks, and saves each
-  user/assistant exchange after a complete successful response.
+  context from stored messages, checks token budgets, streams response chunks,
+  and saves successful exchanges and usage metrics.
+- `app/services/token_context_tracker.py` estimates prompt size and reports
+  context budget status.
 - `app/services/llm_service.py` sends requests to the configured Ollama model
-  and yields streaming response chunks.
+  and yields streaming response chunks along with usage metadata.
 - `app/exceptions.py` defines application-level errors, and
   `app/logging_config.py` configures console and file logging. Logs are written
   to `logs/chatbot.log`.
@@ -131,7 +153,8 @@ personal-ai-chatbot/
 │       ├── context_manager.py       # placeholder
 │       ├── conversation_service.py  # placeholder
 │       ├── llm_service.py
-│       └── persistent_chatbot.py
+│       ├── persistent_chatbot.py
+│       └── token_context_tracker.py
 ├── tests/
 │   ├── run_manual.py
 │   ├── test_config.py
@@ -139,7 +162,8 @@ personal-ai-chatbot/
 │   ├── test_database.py
 │   ├── test_llm_service.py
 │   ├── test_main.py
-│   └── test_persistent_chatbot.py
+│   ├── test_persistent_chatbot.py
+│   └── test_token_context_tracker.py
 ├── .env.example
 ├── main.py
 ├── pyproject.toml
@@ -156,12 +180,15 @@ by `DATABASE_PATH`. It creates:
 - `conversations` for conversation IDs, titles, system prompts, and timestamps.
 - `messages` for user and assistant messages, with a foreign key that deletes
   associated messages when a conversation is deleted.
+- `llm_usage` for estimated prompt size and Ollama token and timing metrics,
+  linked to conversations with cascading deletion.
 
 `ConversationRepository` creates, retrieves, lists, renames, deletes, and
 searches conversations, and adds or retrieves their messages. Both messages in
 a chat exchange are saved in one transaction after a streamed response
 completes successfully. If an Ollama request fails mid-stream, any partial text
-already shown in the terminal is not persisted as conversation history.
+already shown in the terminal is not persisted as conversation history. Usage
+metrics are recorded after a successful exchange.
 
 To run the repository example from the project root (it writes to the
 configured database):

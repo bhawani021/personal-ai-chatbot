@@ -2,7 +2,7 @@ import logging
 
 from app.config import LOG_LEVEL, validate_config
 from app.database import Database
-from app.exceptions import ChatbotError
+from app.exceptions import ChatbotError, ContextLimitExceededError
 from app.logging_config import configure_logging
 from app.repositories.conversation_repository import ConversationRepository
 from app.services.persistent_chatbot import PersistentChatbot
@@ -27,6 +27,8 @@ def print_help():
 
       /history              Display conversation history
       /info                 Display active conversation information
+      /context              Display current context window usage
+      /usage                Display LLM token usage summary
       /help                 Display available commands
       /exit                 Exit the application
 
@@ -225,6 +227,14 @@ def main():
             elif user_input == "/info":
                 print_info(chatbot)
 
+            elif user_input == "/context":
+                display_context_status(chatbot)
+                continue
+
+            elif user_input == "/usage":
+                display_usage_summary(chatbot)
+                continue
+
             elif user_input.startswith("/"):
                 print("Unknown command. Type /help for commands.")
 
@@ -239,6 +249,9 @@ def main():
 
                 print()
 
+        except ContextLimitExceededError as error:
+            print(f"\nContext limit: {error}")
+
         except ChatbotError as error:
             print(f"\nApplication error: {error}")
 
@@ -249,6 +262,41 @@ def main():
         except Exception:
             logger.exception("Unexpected CLI error")
             print("\nAn unexpected error occurred. Check logs/chatbot.log.")
+
+
+def display_context_status(chatbot):
+    status = chatbot.get_context_status()
+
+    if not status:
+        print("No active conversation.")
+        return
+
+    print("\n--- Context Status ---")
+    print(f"Available input budget: {status['max_input_tokens']:,} tokens")
+
+    print(f"Remaining tokens: {status['remaining_tokens']:,}")
+
+    print(f"Context usage: {status['usage_percent']}%")
+
+    print(f"Status: {status['status'].upper()}")
+    print("----------------------\n")
+
+
+def display_usage_summary(chatbot):
+    summary = chatbot.get_usage_summary()
+
+    if not summary or not summary.get("request_count"):
+        print("No usage metrics available")
+        return
+
+    print("\n--- LLM Usage Summary ----")
+    print(f"Requests: {summary['request_count']}")
+    print(f"Estimated prompt tokens: {summary['total_estimated_tokens'] or 0:,}")
+    print(f"Actual prompt tokens: " f"{summary['total_actual_prompt_tokens'] or 0:,}")
+    print(f"Generated tokens: " f"{summary['total_generated_tokens'] or 0:,}")
+    print(f"Peak context usage: " f"{summary['peak_usage_percent'] or 0:.2f}%")
+    print(f"Average context usage: " f"{summary['average_usage_percent'] or 0:.2f}%")
+    print("-------------------------\n")
 
 
 if __name__ == "__main__":

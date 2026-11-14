@@ -65,7 +65,15 @@ class TestLLMService(unittest.TestCase):
             [
                 SimpleNamespace(message=SimpleNamespace(content="Hello")),
                 SimpleNamespace(message=SimpleNamespace(content=" there")),
-                SimpleNamespace(message=SimpleNamespace(content="!")),
+                SimpleNamespace(
+                    message=SimpleNamespace(content="!"),
+                    prompt_eval_count=10,
+                    eval_count=3,
+                    prompt_eval_duration=100,
+                    eval_duration=200,
+                    total_duration=300,
+                    load_duration=50,
+                ),
             ]
         )
 
@@ -81,6 +89,8 @@ class TestLLMService(unittest.TestCase):
 
         mock_client.chat.assert_called_once()
         self.assertTrue(mock_client.chat.call_args.kwargs["stream"])
+        self.assertEqual(service.last_usage["actual_prompt_tokens"], 10)
+        self.assertEqual(service.last_usage["generated_tokens"], 3)
 
 
 if __name__ == "__main__":

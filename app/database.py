@@ -61,6 +61,34 @@ class Database:
                 CREATE INDEX IF NOT EXISTS
                     idx_messages_conversation_id
                 ON messages(conversation_id);
+
+                CREATE TABLE IF NOT EXISTS llm_usage (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+                    conversation_id TEXT NOT NULL,
+
+                    estimated_prompt_tokens INTEGER NOT NULL,
+                    actual_prompt_tokens INTEGER,
+                    generated_tokens INTEGER,
+
+                    context_window_tokens INTEGER NOT NULL,
+                    max_input_tokens INTEGER NOT NULL,
+                    usage_percent REAL NOT NULL,
+
+                    prompt_eval_duration_ns INTEGER,
+                    eval_duration_ns INTEGER,
+                    total_duration_ns INTEGER,
+                    load_duration_ns INTEGER,
+
+                    created_at TEXT NOT NULL,
+
+                    FOREIGN KEY (conversation_id)
+                        REFERENCES conversations(id)
+                        ON DELETE CASCADE
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_llm_usage_conversation_id
+                ON llm_usage(conversation_id);
                 """
 
         with self.get_connection() as connection:

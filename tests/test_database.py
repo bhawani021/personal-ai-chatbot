@@ -24,6 +24,7 @@ class TestDatabase(unittest.TestCase):
 
             self.assertIn("conversations", table_names)
             self.assertIn("messages", table_names)
+            self.assertIn("llm_usage", table_names)
 
     def test_foreign_key_cascade(self):
         with tempfile.TemporaryDirectory() as temp_dir:

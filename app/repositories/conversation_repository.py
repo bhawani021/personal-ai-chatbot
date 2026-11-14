@@ -246,3 +246,65 @@ class ConversationRepository:
             ).fetchall()
 
         return [dict(row) for row in rows]
+
+    def record_usage(
+        self,
+        conversation_id: str,
+        context_data: dict,
+        llm_metrics: dict,
+    ) -> None:
+        created_at = datetime.now(UTC).isoformat()
+
+        with self.database.get_connection() as connection:
+            connection.execute(
+                """
+                INSERT INTO llm_usage (
+                    conversation_id,
+                    estimated_prompt_tokens,
+                    actual_prompt_tokens,
+                    generated_tokens,
+                    context_window_tokens,
+                    max_input_tokens,
+                    usage_percent,
+                    prompt_eval_duration_ns,
+                    eval_duration_ns,
+                    total_duration_ns,
+                    load_duration_ns,
+                    created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    conversation_id,
+                    context_data["estimated_prompt_tokens"],
+                    llm_metrics.get("actual_prompt_tokens"),
+                    llm_metrics.get("generated_tokens"),
+                    context_data["context_window_tokens"],
+                    context_data["max_input_tokens"],
+                    context_data["usage_percent"],
+                    llm_metrics.get("prompt_eval_duration_ns"),
+                    llm_metrics.get("eval_duration_ns"),
+                    llm_metrics.get("total_duration_ns"),
+                    llm_metrics.get("load_duration_ns"),
+                    created_at,
+                ),
+            )
+
+    def get_usage_summary(self, conversation_id: str) -> dict:
+        with self.database.get_connection() as connection:
+            row = connection.execute(
+                """
+                SELECT
+                    COUNT(*) AS request_count,
+                    SUM(estimated_prompt_tokens) AS total_estimated_tokens,
+                    SUM(actual_prompt_tokens) AS total_actual_prompt_tokens,
+                    SUM(generated_tokens) AS total_generated_tokens,
+                    MAX(usage_percent) AS peak_usage_percent,
+                    AVG(usage_percent) AS average_usage_percent
+                FROM llm_usage
+                WHERE conversation_id = ?
+                """,
+                (conversation_id,),
+            ).fetchone()
+
+        return dict(row) if row else {}
