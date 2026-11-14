@@ -2,6 +2,7 @@ import logging
 
 from app.config import SYSTEM_PROMPT
 from app.exceptions import (
+    ContextLimitExceededError,
     ConversationNotFoundError,
     InvalidMessageError,
     LLMServiceError,
@@ -9,6 +10,7 @@ from app.exceptions import (
 )
 from app.repositories.conversation_repository import ConversationRepository
 from app.services.llm_service import LLMService
+from app.services.token_context_tracker import TokenContextTracker
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +27,7 @@ class PersistentChatbot:
         self.repository = repository
         self.llm_service = llm_service or LLMService()
         self.current_conversation_id: str | None = None
+        self.context_tracker = TokenContextTracker()
 
     def create_new_conversation(self, title="New conversation") -> dict:
 
@@ -100,6 +103,8 @@ class PersistentChatbot:
             }
         )
 
+        context_data = self._check_context(llm_messages)
+
         # 4. Get the LLM response
         # IF Ollama fails, neither message is persisted
         assistant_response = self.llm_service.generate(llm_messages)
@@ -115,6 +120,8 @@ class PersistentChatbot:
                 },
             ],
         )
+
+        self._record_usage(conversation_id, context_data)
 
         # 6. Automatically name a new conversation using it;s first message
         if not stored_messages:
@@ -171,6 +178,8 @@ class PersistentChatbot:
             }
         )
 
+        context_data = self._check_context(messages)
+
         response_parts = []
 
         # Generate and display chunks incrementally.
@@ -194,6 +203,8 @@ class PersistentChatbot:
                 {"role": "assistant", "content": assistant_response},
             ],
         )
+
+        self._record_usage(conversation_id, context_data)
 
         if not stored_messages:
             title = user_message.replace("\n", " ")[:50]
@@ -262,3 +273,65 @@ class PersistentChatbot:
         """Search conversations by title or message content"""
 
         return self.repository.search_conversations(keyword)
+
+    def _check_context(self, messages: list[dict]) -> dict:
+        context_data = self.context_tracker.analyze(messages)
+
+        logger.info(
+            "Estimated prompt tokens: %s / %s (%.2f%%)",
+            context_data["estimated_prompt_tokens"],
+            context_data["max_input_tokens"],
+            context_data["usage_percent"],
+        )
+
+        if context_data["status"] == "exceeded":
+            raise ContextLimitExceededError(
+                "Conversation context limit exceeded. "
+                f"Estimated prompt: {context_data['estimated_prompt_tokens']} "
+                f"tokens; available input budget: "
+                f"{context_data['max_input_tokens']} tokens. "
+                "Reduce conversation history before continuing."
+            )
+
+        if context_data["status"] == "warning":
+            logger.warning(
+                "Conversation context usage is high: %.2f%%",
+                context_data["usage_percent"],
+            )
+
+        return context_data
+
+    def _record_usage(self, conversation_id: str, context_data: dict) -> None:
+        self.repository.record_usage(
+            conversation_id=conversation_id,
+            context_data=context_data,
+            llm_metrics=self.llm_service.last_usage,
+        )
+
+    def get_context_status(self):
+        if not self.current_conversation_id:
+            return None
+
+        conversation = self.repository.get_conversation(
+            self.current_conversation_id,
+        )
+
+        if not conversation:
+            return None
+
+        messages = [
+            {
+                "role": "system",
+                "content": conversation.get("system_prompt") or SYSTEM_PROMPT,
+            }
+        ]
+
+        messages.extend(self.repository.get_messages(self.current_conversation_id))
+
+        return self.context_tracker.analyze(messages)
+
+    def get_usage_summary(self):
+        if not self.current_conversation_id:
+            return {}
+
+        return self.repository.get_usage_summary(self.current_conversation_id)

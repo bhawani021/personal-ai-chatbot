@@ -6,15 +6,18 @@ from unittest.mock import patch
 
 from app.database import Database
 from app.exceptions import (
+    ContextLimitExceededError,
     InvalidMessageError,
     LLMServiceError,
     NoActiveConversationError,
 )
 from app.repositories.conversation_repository import ConversationRepository
 from app.services.persistent_chatbot import PersistentChatbot
+from app.services.token_context_tracker import TokenContextTracker
 
 
 class FakeLLMService:
+    last_usage = {}
 
     def generate(self, messages):
         return f"Mock response to: {messages[-1]['content']}"
@@ -69,6 +72,33 @@ class TestPersistentChatbot(unittest.TestCase):
         self.assertEqual(history[0]["role"], "user")
         self.assertEqual(history[1]["role"], "assistant")
 
+    def test_chat_records_usage_summary(self):
+        self.chatbot.create_new_conversation()
+
+        self.chatbot.chat("Track this request")
+
+        summary = self.chatbot.get_usage_summary()
+        self.assertEqual(summary["request_count"], 1)
+        self.assertGreater(summary["total_estimated_tokens"], 0)
+
+    def test_chat_rejects_context_over_budget_without_persisting(self):
+        conversation = self.chatbot.create_new_conversation()
+        self.chatbot.context_tracker = TokenContextTracker(
+            context_window_tokens=64,
+            max_output_tokens=16,
+            safety_margin=8,
+            warning_percent=80,
+        )
+
+        with self.assertRaises(ContextLimitExceededError):
+            self.chatbot.chat("A" * 200)
+
+        self.assertEqual(self.repository.get_messages(conversation["id"]), [])
+        self.assertEqual(
+            self.chatbot.get_usage_summary()["request_count"],
+            0,
+        )
+
     def test_conversation_survives_chatbot_restart(self):
         conversation = self.chatbot.create_new_conversation()
         conversation_id = conversation["id"]
@@ -95,6 +125,7 @@ class TestPersistentChatbot(unittest.TestCase):
         class InspectingLLM:
             def __init__(self):
                 self.received_messages = None
+                self.last_usage = {}
 
             def generate(self, messages):
                 self.received_messages = messages
@@ -295,6 +326,7 @@ class TestPersistentChatbot(unittest.TestCase):
 
             def __init__(self):
                 self.received_messages = None
+                self.last_usage = {}
 
             def generate(self, messages):
                 return "First response"

@@ -20,3 +20,7 @@ class LLMServiceError(ChatbotError):
 
 class ConfigureError(ChatbotError):
     """Raised when application configuration is invalid"""
+
+
+class ContextLimitExceededError(ChatbotError):
+    """Raised when the estimated prompt exceeds the input budget."""
